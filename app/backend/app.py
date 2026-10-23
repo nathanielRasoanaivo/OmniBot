@@ -66,6 +66,7 @@ from wake_listen import (
 import heartbeat_service
 import persona
 import gemini_live_session
+import llm_local
 from grounding_extract import (
     add_inline_citations_from_grounding,
     extract_search_sources_from_grounding_metadata,
@@ -115,6 +116,13 @@ USE_GEMINI_LIVE = (os.environ.get("OMNIBOT_USE_GEMINI_LIVE", "1") or "1").strip(
     "no",
     "off",
 )
+if llm_local.is_local():
+    USE_GEMINI_LIVE = False  # no local equivalent of the Live API yet
+
+
+def llm_ready() -> bool:
+    """True if the selected LLM backend can be used (local server or Gemini key)."""
+    return True if llm_local.is_local() else bool(get_gemini_api_key())
 # Hub rules always injected; personality in persona/SOUL.md (and USER/MEMORY).
 _PIXEL_ANIMATION_AND_SINGLE_REC_RULES = (
     "Animation tools:\n"
@@ -486,7 +494,7 @@ async def _omnibot_lifespan(_: FastAPI):
 
 app = FastAPI(title="ESP32 Gemini Brain Monitor", lifespan=_omnibot_lifespan)
 
-if not get_gemini_api_key():
+if not llm_local.is_local() and not get_gemini_api_key():
     print(
         "WARNING: No Gemini API key — set GEMINI_API_KEY or configure keys in Hub settings (UI / POST /api/hub/settings)."
     )
@@ -2319,6 +2327,81 @@ def _build_live_coordinator(device_id: str) -> gemini_live_session.GeminiLiveCoo
     )
 
 
+async def _stream_local_chat_turn_response(
+    device_id: str,
+    message_content,
+    *,
+    max_tool_rounds: int = 6,
+    extra_system_suffix: str = "",
+):
+    """Same contract as stream_chat_turn_response, served by an OpenAI-compatible local server."""
+    stream_id = str(uuid.uuid4())
+    first_token_notified = False
+
+    await manager.broadcast({
+        "type": "ai_response_stream_start",
+        "stream_id": stream_id,
+        "device_id": device_id,
+    })
+
+    async def on_delta(delta: str) -> None:
+        nonlocal first_token_notified
+        if not first_token_notified:
+            esp32_ws = get_active_esp32_socket(device_id)
+            if esp32_ws:
+                try:
+                    await esp32_ws.send_text(json.dumps({"type": "gemini_first_token"}))
+                except Exception as e:
+                    print(f"Failed to notify ESP32 first token: {e}")
+            first_token_notified = True
+        await manager.broadcast({
+            "type": "ai_response_stream_delta",
+            "stream_id": stream_id,
+            "data": delta,
+        })
+
+    async def execute_tool(fname: str, args: dict) -> dict:
+        return await run_pixel_gemini_tool(device_id, stream_id, fname, args)
+
+    declarations = [
+        FACE_ANIMATION_FUNCTION_DECLARATION,
+        persona.SOUL_REPLACE_DECLARATION,
+        heartbeat_service.MEMORY_REPLACE_DECLARATION,
+        persona.PERSONA_REPLACE_DECLARATION,
+        persona.DAILY_LOG_APPEND_DECLARATION,
+        persona.BOOTSTRAP_COMPLETE_DECLARATION,
+    ]
+
+    lock = gemini_turn_locks.setdefault(device_id, asyncio.Lock())
+    async with lock:
+        turn_tool_state_by_device[device_id] = {"face_animation": False}
+        system_instruction = resolve_effective_system_instruction(
+            device_id, extra_system_suffix=extra_system_suffix
+        )
+        try:
+            full_text, history_by_device[device_id] = await llm_local.run_turn(
+                history=history_by_device.get(device_id) or [],
+                user_message=llm_local.user_message_from_content(message_content),
+                system_instruction=system_instruction,
+                declarations=declarations,
+                execute_tool=execute_tool,
+                on_delta=on_delta,
+                max_rounds=max(1, min(int(max_tool_rounds), 20)),
+            )
+        finally:
+            turn_tool_state_by_device.pop(device_id, None)
+
+    end_msg = {
+        "type": "ai_response_stream_end",
+        "stream_id": stream_id,
+        "device_id": device_id,
+        "data": full_text,
+        "device_stream_connected": device_stream_is_live(device_id),
+    }
+    await manager.broadcast(end_msg)
+    return full_text, stream_id
+
+
 async def stream_chat_turn_response(
     device_id: str,
     message_content,
@@ -2332,6 +2415,14 @@ async def stream_chat_turn_response(
     """
     global _main_async_loop
     _main_async_loop = asyncio.get_running_loop()
+
+    if llm_local.is_local():
+        return await _stream_local_chat_turn_response(
+            device_id,
+            message_content,
+            max_tool_rounds=max_tool_rounds,
+            extra_system_suffix=extra_system_suffix,
+        )
 
     stream_id = str(uuid.uuid4())
     full_text = ""
@@ -2584,7 +2675,7 @@ async def _process_presence_jpeg(device_id: str, jpeg_bytes: bytes) -> None:
     lock = gemini_turn_locks.setdefault(device_id, asyncio.Lock())
     if lock.locked():
         return
-    if not get_gemini_api_key():
+    if not llm_ready():
         return
 
     last_presence_greeting_at[key] = now
@@ -3230,7 +3321,7 @@ async def text_command(req: TextCommandRequest):
             raise HTTPException(status_code=400, detail="Message cannot be empty")
         payload_message = message
 
-    if not get_gemini_api_key():
+    if not llm_ready():
         raise HTTPException(
             status_code=503,
             detail="Gemini API key not configured. Set GEMINI_API_KEY or configure in Hub settings.",

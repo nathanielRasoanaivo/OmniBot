@@ -3,12 +3,14 @@
 from __future__ import annotations
 
 import asyncio
+import json
 from datetime import datetime, timezone
 from functools import partial
 from typing import Any
 
 from google.genai import types
 
+import llm_local
 from hub_config import (
     GEMINI_THINKING_LEVEL_AUTO,
     get_genai_client,
@@ -70,6 +72,50 @@ def _heartbeat_generate_config(*, system_instruction: str, thinking_level: str) 
     return types.GenerateContentConfig(**kw)
 
 
+def _run_local_heartbeat_sync(device_id: str, sys_instr: str, user_msg: str) -> bool:
+    tools = llm_local.tools_from_declarations([MEMORY_REPLACE_DECLARATION])
+    msgs: list[dict] = [
+        {"role": "system", "content": sys_instr},
+        {"role": "user", "content": user_msg},
+    ]
+    memory_updated = False
+    for _ in range(5):
+        reply = llm_local.complete_blocking(msgs, tools)
+        calls = reply.get("tool_calls") or []
+        msgs.append({"role": "assistant", "content": reply.get("content") or "", "tool_calls": calls})
+        if not calls:
+            break
+        for tc in calls:
+            fn = tc.get("function") or {}
+            if fn.get("name") != "memory_replace":
+                result: dict = {"ok": False, "error": "unknown function"}
+            else:
+                try:
+                    args = json.loads(fn.get("arguments") or "{}")
+                except json.JSONDecodeError:
+                    args = {}
+                result = replace_memory_markdown(device_id, str(args.get("markdown") or ""))
+                memory_updated = memory_updated or bool(result.get("ok"))
+            msgs.append(
+                {"role": "tool", "tool_call_id": tc.get("id", ""), "content": json.dumps(result)}
+            )
+    return memory_updated
+
+
+async def _run_local_heartbeat(device_id: str, sys_instr: str, user_msg: str) -> None:
+    try:
+        updated = await asyncio.get_running_loop().run_in_executor(
+            None, partial(_run_local_heartbeat_sync, device_id, sys_instr, user_msg)
+        )
+        set_heartbeat_state(
+            device_id,
+            last_run_utc=datetime.now(timezone.utc).isoformat(),
+            last_memory_updated=updated,
+        )
+    except Exception as e:
+        print(f"[Omnibot/heartbeat] device_id={device_id!r} local error: {e}")
+
+
 async def run_heartbeat_tick(
     device_id: str,
     *,
@@ -77,7 +123,7 @@ async def run_heartbeat_tick(
     default_model: str,
     get_bot_settings_fn,
 ) -> None:
-    if not get_gemini_api_key():
+    if not llm_local.is_local() and not get_gemini_api_key():
         return
 
     async with gemini_turn_lock:
@@ -108,6 +154,10 @@ async def run_heartbeat_tick(
             _pixel_base_rules_for_heartbeat(),
             for_heartbeat_maintenance=True,
         )
+
+        if llm_local.is_local():
+            await _run_local_heartbeat(device_id, sys_instr, user_msg)
+            return
 
         gc = get_genai_client()
         if gc is None:
@@ -186,7 +236,7 @@ async def heartbeat_supervisor_loop(
     while True:
         try:
             await asyncio.sleep(30.0)
-            if not get_gemini_api_key():
+            if not llm_local.is_local() and not get_gemini_api_key():
                 continue
             for device_id in list_all_device_ids_for_heartbeat():
                 bs = get_bot_settings_fn(device_id)
