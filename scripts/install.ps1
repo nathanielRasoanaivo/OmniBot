@@ -7,6 +7,32 @@ function Test-Command($Name) {
     return [bool](Get-Command $Name -ErrorAction SilentlyContinue)
 }
 
+# Les executables natifs (pip, npm) ne sont pas couverts par $ErrorActionPreference:
+# on verifie explicitement leur code de retour.
+function Assert-LastExit($What) {
+    if ($LASTEXITCODE -ne 0) {
+        Write-Error "$What a echoue (code $LASTEXITCODE)."
+    }
+}
+
+# Corrige les commentaires colles a la version (ex: "pkg>=1.0# note"),
+# que pip refuse. Ne touche pas aux URLs (#egg=...) ni aux lignes de commentaire.
+function Repair-Requirements($Path) {
+    if (-not (Test-Path $Path)) { return }
+    # .NET ne suit pas Push-Location: il faut un chemin absolu
+    $Path = (Resolve-Path $Path).Path
+    $raw = [System.IO.File]::ReadAllText($Path)
+    $fixed = [regex]::Replace(
+        $raw,
+        '(?m)^([A-Za-z0-9_.\-]+(?:\[[^\]]*\])?\s*(?:[<>=!~]=?|===)[^\s#;]*)#',
+        '$1  #'
+    )
+    if ($fixed -ne $raw) {
+        [System.IO.File]::WriteAllText($Path, $fixed, (New-Object System.Text.UTF8Encoding($false)))
+        Write-Host "requirements.txt: commentaire(s) colle(s) corrige(s)." -ForegroundColor Yellow
+    }
+}
+
 Write-Host ""
 Write-Host "OmniBot install" -ForegroundColor Cyan
 Write-Host "---------------"
@@ -57,7 +83,10 @@ try {
     Write-Host ""
     # Use python -m pip (not pip.exe) so upgrading pip itself is allowed on Windows/pip 25+
     & $venvPy -m pip install --upgrade pip
+    Assert-LastExit "pip install --upgrade pip"
+    Repair-Requirements "requirements.txt"
     & $venvPy -m pip install -r requirements.txt
+    Assert-LastExit "pip install -r requirements.txt"
 } finally {
     Pop-Location
 }
@@ -70,6 +99,7 @@ try {
     } else {
         npm install
     }
+    Assert-LastExit "npm install"
 } finally {
     Pop-Location
 }
