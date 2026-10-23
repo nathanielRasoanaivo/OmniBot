@@ -34,6 +34,8 @@ $env:OMNIBOT_LLM_BACKEND = "openai_compat"   # or set it in app/backend/.env
 | `OMNIBOT_STT_*` | faster-whisper model, device, language for voice turns | `large-v3-turbo`, `cuda`, auto |
 | `OMNIBOT_TTS_*` | Kokoro language and voice for spoken replies | `f`, `ff_siwis` |
 
+To test without a robot, set **Hub settings → voice source → browser**: the PC microphone feeds the same pipeline.
+
 In this mode no Gemini key is needed and Gemini Live is off. Voice turns use wake word → faster-whisper → LLM → Kokoro, played in the dashboard. Audio/video are not sent to the model; vision frames are not wired yet.
 
 ---

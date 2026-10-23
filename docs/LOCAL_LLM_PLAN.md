@@ -33,6 +33,7 @@ Client unique : `hub_config.get_genai_client()`.
 | 4 Recherche web (`web_search.py`, SearXNG via `OMNIBOT_SEARXNG_URL`) | fait, testé contre un faux SearXNG |
 | 6a STT local (`stt_local.py`, faster-whisper) pour les tours vocaux | fait, non testé (faster-whisper non installable ici) |
 | 6b TTS local (`tts_local.py`, Kokoro) : réponse vocale par phrase vers le lecteur du dashboard | fait, non testé |
+| 6c Micro du PC sans robot (`/ws/voice-bridge` en mode local : wake word → VAD → STT → LLM → TTS, suivi sans wake word) | fait, non testé |
 | 7 UI : l'écran de clé Gemini est ignoré en mode local (`/api/hub/status`) ; pas de réglage du modèle dans l'UI | partiel |
 | 8 README (section « Local LLM mode ») | fait |
 | 5 Vision : images prises en charge par `llm_local`, mais les frames vidéo des tours vocaux ne sont pas envoyées | à faire |

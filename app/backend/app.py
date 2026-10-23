@@ -1253,8 +1253,40 @@ async def _apply_live_voice_source_runtime() -> None:
 def _build_browser_voice_wake_processor(device_id: str) -> WakeListenProcessor:
     did = (device_id or "").strip() or "default_bot"
 
+    local = llm_local.is_local()
+
     async def _noop_utterance(_raw: bytes) -> None:
         return None
+
+    async def _local_utterance(raw: bytes) -> None:
+        """Local mode: hub VAD cuts the utterance; run STT -> LLM -> TTS while the mic is paused."""
+        wp = browser_voice_wake_processor.get(did)
+        if wp:
+            wp.set_paused(True)
+        try:
+            await _send_activity_event_to_esp32(did, "wake_word")
+            await manager.broadcast(
+                {
+                    "type": "processing_started",
+                    "device_id": did,
+                    "data": "Wake utterance captured (browser mic). Processing locally...",
+                }
+            )
+            await _run_local_voice_turn(did, raw)
+        except Exception as e:
+            print(f"[voice-bridge] local turn failed: {e}")
+            await manager.broadcast(
+                {
+                    "type": "error",
+                    "device_id": did,
+                    "data": str(e),
+                    "device_stream_connected": device_stream_is_live(did),
+                }
+            )
+        finally:
+            if wp:
+                wp.set_paused(False)
+                wp.begin_follow_up_window(_post_reply_listen_sec())
 
     async def _forward_live_pcm(chunk: bytes) -> None:
         coord = gemini_live_session.live_coordinator_for(did)
@@ -1279,11 +1311,11 @@ def _build_browser_voice_wake_processor(device_id: str) -> WakeListenProcessor:
         await _on_browser_live_wake_started(did)
 
     return WakeListenProcessor(
-        on_utterance=_noop_utterance,
+        on_utterance=_local_utterance if local else _noop_utterance,
         on_capture_start=_on_cap_start,
         on_capture_end=_on_cap_end,
         on_capture_abort=lambda: _browser_abort_wake_video(did),
-        use_gemini_live=True,
+        use_gemini_live=not local,
         on_live_pcm=_forward_live_pcm,
         on_live_wake=_live_wake,
         get_follow_up_window_s=_post_reply_listen_sec,
@@ -2801,6 +2833,30 @@ async def _speak_reply_locally(device_id: str, stream_id: str, text: str) -> Non
             )
 
 
+async def _run_local_voice_turn(device_id: str, raw_pcm: bytes) -> str:
+    """Local voice turn: STT -> LLM -> TTS (dashboard player). Returns the reply text ('' if nothing heard)."""
+    transcript = await asyncio.to_thread(stt_local.transcribe_pcm16, raw_pcm)
+    print(f"[stt] {transcript!r}")
+    if not transcript:
+        return ""
+    await manager.broadcast(
+        {
+            "type": "live_transcription",
+            "device_id": device_id,
+            "role": "user",
+            "text": transcript,
+            "finished": True,
+            "stream_id": str(uuid.uuid4()),
+        }
+    )
+    full_text, sid = await stream_chat_turn_response(device_id, transcript)
+    try:
+        await _speak_reply_locally(device_id, sid, full_text)
+    except Exception as e:
+        print(f"[tts] local speech failed: {e}")
+    return full_text
+
+
 async def _run_gemini_audio_turn(
     websocket: WebSocket,
     device_id: str,
@@ -2828,27 +2884,8 @@ async def _run_gemini_audio_turn(
             await manager.broadcast({"type": "video_captured", "data": video_data_url})
 
     if llm_local.is_local():
-        transcript = await asyncio.to_thread(stt_local.transcribe_pcm16, raw_pcm)
-        print(f"[stt] {transcript!r}")
-        if not transcript:
-            await websocket.send_text(json.dumps({"status": "success", "reply": ""}))
-            return ""
-        await manager.broadcast(
-            {
-                "type": "live_transcription",
-                "device_id": device_id,
-                "role": "user",
-                "text": transcript,
-                "finished": True,
-                "stream_id": str(uuid.uuid4()),
-            }
-        )
-        full_text, sid = await stream_chat_turn_response(device_id, transcript)
+        full_text = await _run_local_voice_turn(device_id, raw_pcm)
         await websocket.send_text(json.dumps({"status": "success", "reply": full_text}))
-        try:
-            await _speak_reply_locally(device_id, sid, full_text)
-        except Exception as e:
-            print(f"[tts] local speech failed: {e}")
         return full_text
 
     print("Sending to Gemini...", end=" ", flush=True)
@@ -3319,7 +3356,7 @@ async def voice_bridge_websocket(websocket: WebSocket):
     if not _hub_live_voice_source_is_browser():
         await websocket.close(code=4003)
         return
-    if not USE_GEMINI_LIVE or not get_gemini_api_key():
+    if not llm_local.is_local() and (not USE_GEMINI_LIVE or not get_gemini_api_key()):
         await websocket.close(code=4003)
         return
 
