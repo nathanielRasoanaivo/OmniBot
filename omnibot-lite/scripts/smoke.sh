@@ -6,6 +6,9 @@ cd "$(dirname "$0")/.."
 export OMNIBOT_DATA_DIR="/tmp/opencode/omnibot-lite-test-data"
 export OMNIBOT_LLM_BASE_URL="http://127.0.0.1:9999/v1"
 export OMNIBOT_LLM_MODEL="fake-model"
+# Outil web_search activé, Tavily pointé vers le mock du faux serveur.
+export TAVILY_API_KEY="tvly-dummy-pour-test"
+export TAVILY_SEARCH_URL="http://127.0.0.1:9999/search"
 rm -rf "$OMNIBOT_DATA_DIR"
 
 backend/.venv/bin/python scripts/fake_llm_server.py 9999 &

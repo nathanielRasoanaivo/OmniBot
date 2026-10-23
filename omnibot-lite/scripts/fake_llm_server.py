@@ -1,6 +1,7 @@
 """Faux serveur LLM OpenAI-compatible pour tester omnibot-lite sans GPU.
 
 - La 1re fois qu'un message user contient "visage", il renvoie un tool_call face_animation(happy).
+- Si le message user contient "cherche", il renvoie un tool_call web_search (Tavily mocké sur /search).
 - Sinon, il répond par un texte de remplissage en streaming.
 
 Usage : python scripts/fake_llm_server.py [port]   (défaut 9999)
@@ -33,16 +34,55 @@ class Handler(BaseHTTPRequestHandler):
             self._json({"error": "not found"}, 404)
 
     def do_POST(self):
+        if self.path.startswith("/search"):
+            self._json({
+                "answer": "Réponse mockée de Tavily pour le smoke test.",
+                "results": [{
+                    "title": "Résultat mocké",
+                    "url": "https://example.com/mock",
+                    "content": "Extrait mocké avec accents é, à et emoji 🦖 pour vérifier l'utf-8.",
+                }],
+            })
+            return
         if not self.path.startswith("/v1/chat/completions"):
             self._json({"error": "not found"}, 404)
             return
         n = int(self.headers.get("Content-Length") or 0)
         body = json.loads(self.rfile.read(n) or b"{}")
         msgs = body.get("messages") or []
-        user_texts = " ".join(
-            str(m.get("content") or "") for m in msgs if m.get("role") == "user"
+        # Ne raisonner que sur le tour courant : dernier message user + messages après lui.
+        last_user_idx = max(
+            (i for i, m in enumerate(msgs) if m.get("role") == "user"), default=len(msgs) - 1
         )
-        has_tool_result = any(m.get("role") == "tool" for m in msgs)
+        user_texts = str(msgs[last_user_idx].get("content") or "")
+        turn_msgs = msgs[last_user_idx:]
+        has_tool_result = any(m.get("role") == "tool" for m in turn_msgs)
+
+        if not has_tool_result and "cherche" in user_texts.lower():
+            args = {"query": "info récente", "max_results": 3}
+            if body.get("stream"):
+                self._send_sse_named_tool_call("web_search", args)
+            else:
+                self._json({
+                    "choices": [{"message": {
+                        "role": "assistant",
+                        "content": "",
+                        "tool_calls": [{
+                            "id": "call_fake_ws", "type": "function",
+                            "function": {"name": "web_search", "arguments": json.dumps(args)},
+                        }],
+                    }}]
+                })
+            return
+
+        tool_texts = " ".join(str(m.get("content") or "") for m in turn_msgs if m.get("role") == "tool")
+        if "example.com/mock" in tool_texts:
+            reply = "Recherche web intégrée — source : https://example.com/mock (extrait : é, à, 🦖)"
+            if body.get("stream"):
+                self._send_sse_text(reply)
+            else:
+                self._json({"choices": [{"message": {"role": "assistant", "content": reply}}]})
+            return
 
         if not has_tool_result and "visage" in user_texts.lower():
             if body.get("stream"):
@@ -78,12 +118,15 @@ class Handler(BaseHTTPRequestHandler):
         self.wfile.flush()
 
     def _send_sse_tool_call(self, animation: str):
+        self._send_sse_named_tool_call("face_animation", {"animation": animation})
+
+    def _send_sse_named_tool_call(self, name: str, args: dict):
         self.send_response(200)
         self.send_header("Content-Type", "text/event-stream")
         self.end_headers()
         events = [
-            {"choices": [{"delta": {"tool_calls": [{"index": 0, "id": "call_fake1", "function": {"name": "face_animation"}}]}}]},
-            {"choices": [{"delta": {"tool_calls": [{"index": 0, "function": {"arguments": json.dumps({"animation": animation})}}]}}]},
+            {"choices": [{"delta": {"tool_calls": [{"index": 0, "id": "call_fake1", "function": {"name": name}}]}}]},
+            {"choices": [{"delta": {"tool_calls": [{"index": 0, "function": {"arguments": json.dumps(args, ensure_ascii=False)}}]}}]},
         ]
         for e in events:
             self.wfile.write(f"data: {json.dumps(e)}\n\n".encode())

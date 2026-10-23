@@ -71,8 +71,28 @@ async def main():
     r = requests.post(f"{HUB}/api/bots/{did}/face-animation", json={"animation": "nope"}, timeout=5)
     check(r.status_code == 400, "face-animation invalide rejetée")
 
+    # web_search : tool_call dispatché + vrai appel HTTP vers le mock Tavily + retour au LLM.
+    events2: list[dict] = []
+    async with websockets.connect(WS) as ws:
+        r = requests.post(f"{HUB}/api/bots/{did}/chat", json={"message": "Cherche des infos récentes"}, timeout=5).json()
+        check(r.get("ok"), "chat web_search accepté")
+        deadline = asyncio.get_event_loop().time() + 30
+        while asyncio.get_event_loop().time() < deadline:
+            try:
+                raw = await asyncio.wait_for(ws.recv(), timeout=15)
+            except asyncio.TimeoutError:
+                break
+            ev = json.loads(raw)
+            events2.append(ev)
+            if ev.get("type") == "chat_done":
+                break
+    ws_search = next((e for e in events2 if e["type"] == "tool_call" and e.get("name") == "web_search"), None)
+    check(ws_search is not None, "événement tool_call web_search")
+    done2 = next((e.get("text", "") for e in reversed(events2) if e["type"] == "chat_done"), "")
+    check("example.com/mock" in done2, "outil web_search exécuté puis relu par le LLM (mock Tavily)")
+
     hist = requests.get(f"{HUB}/api/bots/{did}/history", timeout=5).json()["messages"]
-    check(len(hist) == 2 and hist[0]["role"] == "user", "historique persisté (user+assistant)")
+    check(len(hist) == 4 and hist[0]["role"] == "user", "historique persisté (2 tours user+assistant)")
 
     st = requests.post(f"{HUB}/api/bots/{did}/settings", json={"heartbeat_enabled": False}, timeout=5).json()
     check(st["heartbeat_enabled"] is False, "réglages heartbeat")

@@ -68,6 +68,23 @@ Exemples d'URL :
 
 ## 3. Utilisation
 
+### Recherche web (optionnelle — `web_search`)
+
+Les bots peuvent chercher des infos actuelles sur le web via **Tavily**. C'est désactivé
+par défaut. Pour l'activer :
+
+1. Créer une clé gratuite sur <https://app.tavily.com>.
+2. La mettre dans le fichier `.env` à côté de `docker-compose.yml` :
+   ```
+   TAVILY_API_KEY=tvly-...
+   ```
+3. Relancer : `docker compose up -d` (rebuild inutile, seule l'env change).
+
+Une fois la clé présente, l'outil `web_search` est proposé au LLM à chaque tour de chat ;
+sans clé il n'apparaît pas et les bots n'y ont pas accès. Le CLI `tvly` (outil pour agent
+de codage) n'est **pas** utilisé par le hub : le runtime passe directement par l'API REST.
+
+
 1. **+ Nouveau bot** dans la barre latérale.
 2. Bouton **✨ Donne-moi une âme** (barre du haut) : réinitialise la persona et lance le
    rituel de naissance (BOOTSTRAP) — le bot se présente et découvre qui il est avec toi.

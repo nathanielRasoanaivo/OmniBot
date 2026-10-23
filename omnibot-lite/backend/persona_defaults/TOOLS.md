@@ -38,6 +38,15 @@ ne désactive rien** — c'est le hub omnibot-lite qui configure la disponibilit
 
 - Supprime **BOOTSTRAP.md** quand le rituel de première rencontre est terminé.
 
+### `web_search`
+
+- Cherche sur le web (Tavily) des infos actuelles : actualités, prix, versions, météo,
+  faits récents. Renvoie une synthèse + des résultats (titre, URL, extrait).
+- **Paramètres :** `query` (obligatoire), `max_results` (1 à 8, défaut 5).
+- **Disponible seulement si** l'humain a configuré `TAVILY_API_KEY` côté hub — si l'outil
+  n'apparaît pas, n'invente pas de results : dis que la recherche web n'est pas activée.
+- Quand tu t'en sers, **cite les URL** des sources dans ta réponse.
+
 ## Règle
 
 Chaque fois que tu changes un fichier avec un outil, **dis-le clairement** dans ta réponse.

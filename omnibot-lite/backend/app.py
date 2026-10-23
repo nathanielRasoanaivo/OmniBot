@@ -20,6 +20,7 @@ import bots as bots_mod
 import heartbeat
 import llm_client
 import persona
+import web_search
 from animations import (
     FACE_ANIMATION_DISPLAY_MS,
     FACE_ANIMATION_NAMES,
@@ -76,7 +77,9 @@ _BASE_RULES = (
     "- Utilise l'outil `face_animation` uniquement pour des états de conversation ou des "
     "émotions. Un seul argument : `animation` = une parmi speaking, happy, mad, sad, "
     "surprised, sleepy, thinking, confused, excited, love. Au plus UNE animation par tour.\n\n"
-    "Langue : réponds dans la langue de l'humain (français par défaut)."
+    "Langue : réponds dans la langue de l'humain (français par défaut).\n\n"
+    "Recherche web : si l'outil `web_search` est disponible, utilise-le dès qu'une question "
+    "porte sur l'actualité ou des faits que tu ne peux pas connaître, et cite les URL sources."
 )
 
 BOOTSTRAP_BASE_RULES = (
@@ -174,7 +177,7 @@ def history_for_ui(device_id: str) -> list[dict[str, Any]]:
 
 
 def _chat_declarations() -> list[dict]:
-    return [
+    decls = [
         FACE_ANIMATION_DECLARATION,
         persona.SOUL_REPLACE_DECLARATION,
         MEMORY_REPLACE_DECLARATION,
@@ -182,6 +185,9 @@ def _chat_declarations() -> list[dict]:
         persona.DAILY_LOG_APPEND_DECLARATION,
         persona.BOOTSTRAP_COMPLETE_DECLARATION,
     ]
+    if web_search.is_enabled():
+        decls.append(web_search.WEB_SEARCH_DECLARATION)
+    return decls
 
 
 async def _broadcast_face_animation(device_id: str, animation: str, turn_id: Optional[str]) -> None:
@@ -227,6 +233,8 @@ def _make_execute_tool(device_id: str, turn_id: str):
             return persona.append_daily_log_line(device_id, str(args.get("line") or ""))
         if name == "bootstrap_complete":
             return persona.delete_bootstrap_file(device_id)
+        if name == "web_search":
+            return await asyncio.to_thread(web_search.execute, args)
         return {"ok": False, "error": f"outil inconnu : {name}"}
 
     return execute_tool
@@ -287,6 +295,8 @@ async def _run_chat_turn(
                     summary = str(args.get("file") or "") or f"{len(str(args.get('markdown') or ''))} octets"
                 elif name == "daily_log_append":
                     summary = str(args.get("line") or "")[:120]
+                elif name == "web_search":
+                    summary = str(args.get("query") or "")[:120]
                 await manager.broadcast({
                     "type": "tool_call", "device_id": device_id, "turn_id": turn_id,
                     "name": name, "summary": summary,
