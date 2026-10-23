@@ -1,0 +1,12 @@
+# Python
+__pycache__/
+*.pyc
+.venv/
+.env
+
+# Données runtime du hub (personas, historiques, réglages, clés)
+data/
+
+# Frontend
+frontend/node_modules/
+frontend/dist/

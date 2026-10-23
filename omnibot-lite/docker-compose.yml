@@ -1,0 +1,14 @@
+services:
+  omnibot-lite:
+    build: .
+    container_name: omnibot-lite
+    ports:
+      - "8080:8080"
+    volumes:
+      - ./data:/data
+    environment:
+      # Valeurs par défaut de la config LLM (modifiables aussi via l'UI, Règlages du hub).
+      OMNIBOT_LLM_BASE_URL: ${OMNIBOT_LLM_BASE_URL:-}
+      OMNIBOT_LLM_MODEL: ${OMNIBOT_LLM_MODEL:-}
+      OMNIBOT_LLM_API_KEY: ${OMNIBOT_LLM_API_KEY:-}
+    restart: unless-stopped
