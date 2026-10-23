@@ -17,6 +17,7 @@ export default function App() {
   const [faces, setFaces] = useState({})
   const [showHub, setShowHub] = useState(false)
   const [showBot, setShowBot] = useState(false)
+  const [drawer, setDrawer] = useState(false)
   const [hubOk, setHubOk] = useState(null)
   const faceTimers = useRef({})
   const selectedRef = useRef(null)
@@ -147,25 +148,28 @@ export default function App() {
   const currentFace = animMap[faces[selectedId] || 'idle'] || animMap.idle || { name: 'idle', label_fr: 'Repos', face: {}, deco: [], color: '#8aa2c8' }
 
   return (
-    <div className="app">
+    <div className={`app${drawer ? ' drawer-open' : ''}`} style={{ '--accent': currentFace.color }}>
       <Sidebar
         bots={bots}
         selectedId={selectedId}
         processingIds={processing}
-        onSelect={setSelectedId}
+        onSelect={(id) => { setSelectedId(id); setDrawer(false) }}
         onCreate={createBot}
-        onOpenHubSettings={() => setShowHub(true)}
+        onOpenHubSettings={() => { setShowHub(true); setDrawer(false) }}
         hubOk={hubOk}
       />
+      {drawer && <div className="scrim" onClick={() => setDrawer(false)} />}
 
       <main className="main">
         {selectedBot ? (
           <>
             <div className="topbar">
+              <button className="menu-btn" onClick={() => setDrawer(true)} aria-label="Ouvrir la liste des bots">☰</button>
               <h1>{selectedBot.display_name}</h1>
+              <span className={`llm-dot topbar-dot ${hubOk ? 'ok' : 'ko'}`} title={hubOk ? 'Serveur LLM joignable' : 'Serveur LLM injoignable — Règlages hub'} />
               <div className="topbar-actions">
-                <button className="ghost" onClick={bootstrap} title="Rituel Give me a soul (réinitialise la persona)">✨ Donne-moi une âme</button>
-                <button className="ghost" onClick={() => setShowBot(true)} title="Réglages du bot">⚙ Réglages</button>
+                <button className="ghost" onClick={bootstrap} title="Rituel Give me a soul (réinitialise la persona)">✨<span className="btn-label"> Donne-moi une âme</span></button>
+                <button className="ghost" onClick={() => setShowBot(true)} title="Réglages du bot">⚙<span className="btn-label"> Réglages</span></button>
               </div>
             </div>
 
