@@ -31,3 +31,6 @@ openwakeword>=0.6.0
 setuptools>=69,<81
 webrtcvad>=2.0.10# Optional, local LLM mode only: speech-to-text
 faster-whisper>=1.0.0
+# Optional, local LLM mode only: text-to-speech
+kokoro>=0.9.4
+soundfile

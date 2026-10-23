@@ -32,7 +32,8 @@ Client unique : `hub_config.get_genai_client()`.
 | 3 Heartbeat local | fait, non testé en réel |
 | 4 Recherche web (`web_search.py`, SearXNG via `OMNIBOT_SEARXNG_URL`) | fait, testé contre un faux SearXNG |
 | 6a STT local (`stt_local.py`, faster-whisper) pour les tours vocaux | fait, non testé (faster-whisper non installable ici) |
-| 5, 6b (TTS local), 7, 8 | à faire |
+| 6b TTS local (`tts_local.py`, Kokoro) : réponse vocale par phrase vers le lecteur du dashboard | fait, non testé |
+| 5 (vision), 7 (UI), 8 (README) | à faire |
 
 Variables : `OMNIBOT_LLM_BACKEND`, `OMNIBOT_LLM_BASE_URL`, `OMNIBOT_LLM_MODEL`, `OMNIBOT_LLM_API_KEY` (voir `.env.example`).
 En mode local, Gemini Live est désactivé et les tours audio/vidéo ne sont pas pris en charge (texte et images seulement).

@@ -68,10 +68,12 @@ import persona
 import gemini_live_session
 import llm_local
 import stt_local
+import tts_local
 import web_search
 from grounding_extract import (
     add_inline_citations_from_grounding,
     extract_search_sources_from_grounding_metadata,
+    strip_for_live_tts,
 )
 
 # ==========================================
@@ -2776,6 +2778,29 @@ async def _process_enrollment_jpeg(device_id: str, jpeg_bytes: bytes) -> None:
         print(f"[face] enrollment failed (no face or represent error) for {device_id}/{pid}")
 
 
+async def _speak_reply_locally(device_id: str, stream_id: str, text: str) -> None:
+    """Synthesize the reply sentence by sentence and push PCM to the dashboard player (live_audio_chunk)."""
+    plain = strip_for_live_tts(text)
+    loop = asyncio.get_running_loop()
+    for sentence in tts_local.split_sentences(plain):
+        gen = tts_local.synthesize_pcm(sentence)
+        while True:
+            chunk = await loop.run_in_executor(None, partial(next, gen, None))
+            if chunk is None:
+                break
+            await manager.broadcast(
+                {
+                    "type": "live_audio_chunk",
+                    "device_id": device_id,
+                    "stream_id": stream_id,
+                    "sample_rate": tts_local.SAMPLE_RATE,
+                    "channels": 1,
+                    "encoding": "pcm_s16le",
+                    "b64": base64.b64encode(chunk).decode("ascii"),
+                }
+            )
+
+
 async def _run_gemini_audio_turn(
     websocket: WebSocket,
     device_id: str,
@@ -2818,8 +2843,12 @@ async def _run_gemini_audio_turn(
                 "stream_id": str(uuid.uuid4()),
             }
         )
-        full_text, _sid = await stream_chat_turn_response(device_id, transcript)
+        full_text, sid = await stream_chat_turn_response(device_id, transcript)
         await websocket.send_text(json.dumps({"status": "success", "reply": full_text}))
+        try:
+            await _speak_reply_locally(device_id, sid, full_text)
+        except Exception as e:
+            print(f"[tts] local speech failed: {e}")
         return full_text
 
     print("Sending to Gemini...", end=" ", flush=True)
