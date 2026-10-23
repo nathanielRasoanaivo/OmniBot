@@ -7,7 +7,7 @@ Doc de référence pour le debug. Tout est en français ; les noms de fichiers/t
 ```mermaid
 flowchart LR
     subgraph MacMini["Mac Mini (Ubuntu, Docker)"]
-        subgraph Container["Conteneur omnibot-lite :8080"]
+        subgraph Container["Conteneur omnibot-lite (interne :8080, hôte 127.0.0.1:8000)"]
             SPA["Frontend React<br/>(build Vite, servi par FastAPI)"]
             API["backend/app.py<br/>FastAPI : REST + WebSocket /ws/monitor"]
             LLM["backend/llm_client.py<br/>client OpenAI-compatible (SSE + rounds tools)"]
@@ -15,7 +15,7 @@ flowchart LR
             WS_["backend/web_search.py<br/>outil recherche web (Tavily)"]
             DATA[("Volume ./data<br/>personas, historiques, réglages")]
         end
-        BROWSER["Navigateur<br/>http://mac-mini:8080"]
+    BROWSER["Navigateur<br/>https://macmini…:11443 (Tailscale serve)"]
     end
     STRATA["PC Windows 11<br/>Strata :8080/v1 ou Ollama :11434/v1"]
     TAVILY["api.tavily.com"]
@@ -149,7 +149,7 @@ Le WS se reconnecte automatiquement ; les événements ne sont **pas** rejoués 
 | Fichier | Rôle |
 |---|---|
 | `Dockerfile` | Multi-étapes : stage 1 `npm ci && vite build`, stage 2 Python + `uvicorn` ; le SPA est copié et servi par FastAPI. Port interne **8080** |
-| `docker-compose.yml` | Port hôte `8080:8080` (changer la **gauche** si occupé), volume `./data:/data`, passe-through env `OMNIBOT_LLM_*` et `TAVILY_API_KEY` depuis `.env` |
+| `docker-compose.yml` | Port hôte `127.0.0.1:8000 → 8080` (**LAN fermé** : le hub n'a pas d'auth, accès via `tailscale serve --https=… http://127.0.0.1:8000`), volume `./data:/data`, passe-through env `OMNIBOT_LLM_*` et `TAVILY_API_KEY` depuis `.env` |
 | `.env.example` → `.env` | Modèle de config (jamais commité) |
 | `scripts/dev.sh` | Dev local sans Docker : uvicorn :8080 + Vite :5173 (proxy `/api` + `/ws`) |
 | `scripts/fake_llm_server.py` | Faux LLM OpenAI + mock Tavily `/search` : « visage » → tool_call face ; « cherche » → tool_call web_search |
@@ -162,7 +162,8 @@ Le WS se reconnecte automatiquement ; les événements ne sont **pas** rejoués 
 | Le bot ne voit pas `web_search` | Image pas rebuild (`--build` oublié) ou clé absente du conteneur | `git pull && docker compose up -d --build`, puis `docker compose exec omnibot-lite printenv TAVILY_API_KEY` |
 | Accents/emoji cassés | Régression utf-8 SSE | `r.encoding = "utf-8"` dans `llm_client._stream_completion` ; le smoke teste accents/’/🐶 |
 | `chat_error` « Serveur LLM injoignable » | Strata lancé sans `--access lan`, IP/firewall, `hub_settings.json` pointant au mauvais serveur | `/api/health` → `llm_base_url` + `llm_reachable` |
-| Hub ne répond plus sur le port | Port hôte 8080 pris par un autre conteneur | `docker ps --filter publish=8080`, changer `ports:` côté gauche |
+| Hub injoignable depuis le LAN | Normal : bind `127.0.0.1:8000` (LAN fermé volontairement) | Accès via `tailscale serve` (https) ou `http://127.0.0.1:8000` sur le Mac Mini |
+| Conflit de port hôte | 8000 déjà pris côté localhost | Changer le **8000** de `127.0.0.1:8000:8080`, puis le proxy `tailscale serve` |
 | Bot muet alors que le health est vert | Verrou de tour occupé (heartbeat en cours) | logs `[heartbeat]`, `POST …/heartbeat/run` pour reproduire |
 | MEMORY.md ne se met jamais à jour | `heartbeat_enabled: false` ou intervalle énorme dans `bot_settings.json` ; HEARTBEAT.md vidé | `data/bot_settings.json`, `data/persona/<id>/.heartbeat_state.json`, logs |
 | Bot dit n'importe quoi sur ses souvenirs | Historique/persona corrompus | `data/history/<id>.json` ; chat-reset et reset-persona |

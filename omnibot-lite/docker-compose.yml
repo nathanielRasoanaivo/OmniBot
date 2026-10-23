@@ -3,7 +3,10 @@ services:
     build: .
     container_name: omnibot-lite
     ports:
-      - "8080:8080"
+      # 127.0.0.1:8000 sur l'hôte — volontairement NON exposé au LAN (le hub n'a
+      # pas d'authentification). Accès distant via Tailscale :
+      #   tailscale serve --bg --https=11443 http://127.0.0.1:8000
+      - "127.0.0.1:8000:8080"
     volumes:
       - ./data:/data
     environment:

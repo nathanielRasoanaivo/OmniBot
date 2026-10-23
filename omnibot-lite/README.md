@@ -47,7 +47,15 @@ cp .env.example .env                          # puis éditer .env
 docker compose up -d --build
 ```
 
-Ouvrir **http://<ip-du-mac-mini>:8080**.
+Le hub n'est **pas exposé au LAN** (pas d'authentification) : il écoute sur
+`127.0.0.1:8000` sur le Mac Mini. Accès via Tailscale serve, une fois pour toutes :
+
+```bash
+tailscale serve --bg --https=11443 http://127.0.0.1:8000
+```
+
+Puis ouvrir **https://macmini.<tailnet>.ts.net:11443** depuis n'importe quel appareil
+du tailnet (ou `http://127.0.0.1:8000` directement sur le Mac Mini).
 
 Le volume `./data` contient tout l'état (personas, journaux, historiques, réglages,
 clé LLM) — sauvegardable/copiable tel quel.
@@ -167,7 +175,7 @@ omnibot-lite/
 ├── frontend/           # React 19 + Vite (sidebar, chat, éditeur persona, visage animé)
 ├── scripts/            # fake_llm_server.py + smoke tests
 ├── Dockerfile          # build Vite → image Python unique (API + SPA sur :8080)
-├── docker-compose.yml  # port 8080, volume ./data
+├── docker-compose.yml  # 127.0.0.1:8000 → 8080 (LAN fermé), volume ./data
 └── .env.example
 ```
 
@@ -178,5 +186,8 @@ omnibot-lite/
   *Règlages du hub*.
 - **Réponses très lentes / erreurs** : Strata est mono-requête — réduis le nombre de bots
   actifs en heartbeat simultanés ou augmente les intervalles.
+- **Injoignable depuis le réseau local** : normal, le hub est bindé sur `127.0.0.1:8000`
+  (LAN fermé volontairement). Passe par Tailscale serve (`https://macmini…:11443`) ou
+  ouvre `http://127.0.0.1:8000` sur le Mac Mini lui-même.
 - **Tout est perdu après `docker compose down -v`** : le volume est `./data` (bind mount),
   il ne disparaît qu'avec `-v` ou en supprimant le dossier.
