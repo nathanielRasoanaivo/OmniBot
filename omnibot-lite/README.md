@@ -1,5 +1,7 @@
 # omnibot-lite
 
+> Schéma d'architecture, rôles des fichiers et table de debug : voir [ARCHITECTURE.md](ARCHITECTURE.md).
+
 Hub web de **bots virtuels à personnalité** (style OpenClaw : SOUL / IDENTITY / USER /
 MEMORY / HEARTBEAT…), propulsé par un serveur LLM **OpenAI-compatible distant**
 (Strata ou Ollama sur ton PC Windows 11 du LAN). **Zéro voix, zéro cloud, zéro firmware.**
