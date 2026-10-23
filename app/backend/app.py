@@ -67,6 +67,7 @@ import heartbeat_service
 import persona
 import gemini_live_session
 import llm_local
+import stt_local
 import web_search
 from grounding_extract import (
     add_inline_citations_from_grounding,
@@ -2800,6 +2801,26 @@ async def _run_gemini_audio_turn(
             video_b64 = base64.b64encode(video_bytes).decode("utf-8")
             video_data_url = f"data:video/mp4;base64,{video_b64}"
             await manager.broadcast({"type": "video_captured", "data": video_data_url})
+
+    if llm_local.is_local():
+        transcript = await asyncio.to_thread(stt_local.transcribe_pcm16, raw_pcm)
+        print(f"[stt] {transcript!r}")
+        if not transcript:
+            await websocket.send_text(json.dumps({"status": "success", "reply": ""}))
+            return ""
+        await manager.broadcast(
+            {
+                "type": "live_transcription",
+                "device_id": device_id,
+                "role": "user",
+                "text": transcript,
+                "finished": True,
+                "stream_id": str(uuid.uuid4()),
+            }
+        )
+        full_text, _sid = await stream_chat_turn_response(device_id, transcript)
+        await websocket.send_text(json.dumps({"status": "success", "reply": full_text}))
+        return full_text
 
     print("Sending to Gemini...", end=" ", flush=True)
     turn_content = [
