@@ -67,6 +67,7 @@ import heartbeat_service
 import persona
 import gemini_live_session
 import llm_local
+import web_search
 from grounding_extract import (
     add_inline_citations_from_grounding,
     extract_search_sources_from_grounding_metadata,
@@ -2360,7 +2361,24 @@ async def _stream_local_chat_turn_response(
             "data": delta,
         })
 
+    search_sources: dict[str, dict] = {}
+    search_queries: list[str] = []
+
     async def execute_tool(fname: str, args: dict) -> dict:
+        if fname == "web_search":
+            await manager.broadcast({
+                "type": "tool_call",
+                "device_id": device_id,
+                "stream_id": stream_id,
+                "function_name": fname,
+                "arguments": args,
+            })
+            result = await asyncio.to_thread(web_search.search, str(args.get("query") or ""))
+            if result.get("ok"):
+                search_queries.append(result["query"])
+                for r in result["results"]:
+                    search_sources.setdefault(r["uri"], {"title": r["title"], "uri": r["uri"]})
+            return result
         return await run_pixel_gemini_tool(device_id, stream_id, fname, args)
 
     declarations = [
@@ -2371,6 +2389,8 @@ async def _stream_local_chat_turn_response(
         persona.DAILY_LOG_APPEND_DECLARATION,
         persona.BOOTSTRAP_COMPLETE_DECLARATION,
     ]
+    if web_search.is_enabled():
+        declarations.append(web_search.WEB_SEARCH_DECLARATION)
 
     lock = gemini_turn_locks.setdefault(device_id, asyncio.Lock())
     async with lock:
@@ -2398,6 +2418,10 @@ async def _stream_local_chat_turn_response(
         "data": full_text,
         "device_stream_connected": device_stream_is_live(device_id),
     }
+    if search_sources:
+        end_msg["search_sources"] = list(search_sources.values())
+    if search_queries:
+        end_msg["search_queries"] = search_queries
     await manager.broadcast(end_msg)
     return full_text, stream_id
 

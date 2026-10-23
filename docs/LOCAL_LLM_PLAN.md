@@ -30,7 +30,8 @@ Client unique : `hub_config.get_genai_client()`.
 |---|---|
 | 1-2 Chat texte local (`app/backend/llm_local.py`, dispatch dans `app.py`) | fait, testé contre un faux serveur |
 | 3 Heartbeat local | fait, non testé en réel |
-| 4-8 | à faire |
+| 4 Recherche web (`web_search.py`, SearXNG via `OMNIBOT_SEARXNG_URL`) | fait, testé contre un faux SearXNG |
+| 5-8 | à faire |
 
 Variables : `OMNIBOT_LLM_BACKEND`, `OMNIBOT_LLM_BASE_URL`, `OMNIBOT_LLM_MODEL`, `OMNIBOT_LLM_API_KEY` (voir `.env.example`).
 En mode local, Gemini Live est désactivé et les tours audio/vidéo ne sont pas pris en charge (texte et images seulement).
