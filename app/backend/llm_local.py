@@ -122,7 +122,7 @@ def complete_blocking(messages: list[dict], tools: list[dict], model: Optional[s
 
 def server_reachable() -> bool:
     try:
-        return requests.get(f"{base_url()}/models", headers=_headers(), timeout=3).status_code < 500
+        return requests.get(f"{base_url()}/models", headers=_headers(), timeout=1).status_code < 500
     except requests.RequestException:
         return False
 

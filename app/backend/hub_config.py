@@ -224,9 +224,14 @@ def save_hub_app_settings(data: dict[str, Any]) -> None:
 
 
 def hub_public_status() -> dict[str, Any]:
-    gk = get_gemini_api_key()
+    import llm_local
+
+    local = llm_local.is_local()
     return {
-        "gemini_configured": bool(gk),
+        # Local mode needs no Gemini key: report "configured" so the dashboard skips the key screen.
+        "gemini_configured": local or bool(get_gemini_api_key()),
+        "llm_backend": llm_local.backend_name(),
+        "llm_server_reachable": llm_local.server_reachable() if local else None,
         "data_dir": str(DATA_DIR),
     }
 

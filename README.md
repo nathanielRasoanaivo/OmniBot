@@ -15,6 +15,29 @@ Licensed under the [MIT License](LICENSE). See [CONTRIBUTING.md](CONTRIBUTING.md
 - **LINK TO CAD -** https://cad.onshape.com/documents/36ef3639f0adcbd215c2da2e/w/06b991eb4c1f6f28b2fd677f/e/884c5e41b396d185bfcf0efe
 ---
 
+## Local LLM mode (no cloud)
+
+The hub can run on a local OpenAI-compatible server instead of Gemini (tested design target: Windows 11, 16 GB GPU). See [`docs/LOCAL_LLM_PLAN.md`](docs/LOCAL_LLM_PLAN.md) for status and limits.
+
+```powershell
+winget install Ollama.Ollama
+ollama pull qwen3:14b
+$env:OMNIBOT_LLM_BACKEND = "openai_compat"   # or set it in app/backend/.env
+.\scripts\start.ps1
+```
+
+| Variable | Role | Default |
+|---|---|---|
+| `OMNIBOT_LLM_BACKEND` | `gemini` or `openai_compat` | `gemini` |
+| `OMNIBOT_LLM_BASE_URL` / `OMNIBOT_LLM_MODEL` / `OMNIBOT_LLM_API_KEY` | Server URL, model, optional key | `http://127.0.0.1:11434/v1`, `qwen3:14b` |
+| `OMNIBOT_SEARXNG_URL` | Enables the `web_search` tool (SearXNG with JSON format) | unset |
+| `OMNIBOT_STT_*` | faster-whisper model, device, language for voice turns | `large-v3-turbo`, `cuda`, auto |
+| `OMNIBOT_TTS_*` | Kokoro language and voice for spoken replies | `f`, `ff_siwis` |
+
+In this mode no Gemini key is needed and Gemini Live is off. Voice turns use wake word → faster-whisper → LLM → Kokoro, played in the dashboard. Audio/video are not sent to the model; vision frames are not wired yet.
+
+---
+
 ## Quick setup
 
 ### 1. Download the repository
