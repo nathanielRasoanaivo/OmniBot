@@ -10,7 +10,7 @@ from __future__ import annotations
 
 from typing import Any
 
-FACE_ANIMATION_DISPLAY_MS = 2500
+FACE_ANIMATION_DISPLAY_MS = 6000
 
 # Paramètres interpolables du visage web :
 #   brow_tilt_l / brow_tilt_r : inclinaison des sourcils (deg, positif = extrémité interne basse)
