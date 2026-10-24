@@ -242,7 +242,20 @@ button.danger-btn:hover { background: #2a1b1c; }
 }
 
 .face-preview { width: 100%; max-width: 260px; margin: 0 auto; }
-.face-preview svg rect { transition: stroke 0.6s; }
+/* La tête s'illumine de la couleur de l'humeur (stroke + halo), transition douce. */
+.face-preview svg rect {
+  transition: stroke 0.6s, filter 0.6s;
+  filter: drop-shadow(0 0 10px color-mix(in srgb, var(--accent) 45%, transparent));
+}
+.face-preview .eye-white { filter: drop-shadow(0 0 5px rgba(232, 238, 247, 0.28)); }
+.face-preview .antenna-tip {
+  transition: fill 0.6s;
+  filter: drop-shadow(0 0 4px color-mix(in srgb, var(--accent) 80%, transparent));
+}
+/* Émotions fortes : halo plus prononcé */
+.face-preview.excited svg rect, .face-preview.mad svg rect {
+  filter: drop-shadow(0 0 16px color-mix(in srgb, var(--accent) 65%, transparent));
+}
 
 .face-label { display: flex; flex-direction: column; gap: 2px; font-size: 13px; }
 .face-label b { font-size: 14px; }
@@ -262,10 +275,12 @@ button.danger-btn:hover { background: #2a1b1c; }
 .deco-tear { animation: tearDrop 2.4s ease-in infinite; }
 .deco-steam { animation: steamUp 1.6s ease-in-out infinite; }
 .deco-zzz { animation: zzzFloat 2.8s ease-in-out infinite; }
-.deco-sparkle { animation: sparkleTwinkle 1.4s ease-in-out infinite; }
+.deco-sparkle path { animation: sparkleTwinkle 1.4s ease-in-out infinite; }
 
 @keyframes decoFade { from { opacity: 0; } }
 @keyframes decoPop { from { transform: scale(0); } }
+.deco-sparkle path:nth-child(2) { animation-delay: 0.25s; }
+.deco-sparkle path:nth-child(3) { animation-delay: 0.5s; }
 @keyframes tearDrop {
   0% { transform: translateY(0); opacity: 0; }
   25% { opacity: 1; }
