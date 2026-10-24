@@ -1,6 +1,10 @@
 import { useEffect, useRef, useState } from 'react'
-import { useRive } from '@rive-app/react-canvas'
+import { Rive as RiveRuntime, useRive } from '@rive-app/react-canvas'
 import FacePreview from './FacePreview'
+
+// API linéaire volontaire (la seule pilotable avec ce .riv) : on coupe le bruit
+// des avertissements de dépréciation correspondants.
+RiveRuntime.suppressDeprecationWarnings = ['default-state-machine', 'animation-names', 'loop-events']
 
 // Personnage Rive (panda-emotion-animation.riv) : 10 animations linéaires nommées.
 // Mapping des 11 états du backend vers les clips du panda. Les émotions sans

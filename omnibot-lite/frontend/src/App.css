@@ -242,7 +242,10 @@ button.danger-btn:hover { background: #2a1b1c; }
 }
 
 .face-preview { width: 100%; max-width: 260px; margin: 0 auto; }
-.face-preview canvas { display: block; width: 100%; height: auto; }
+/* Rive : le canvas est dimensionné en px par le runtime depuis la hauteur du
+   conteneur → il faut une hauteur définie (carrée ; l'artboard est encadré en
+   « contain »). */
+.face-preview.rive { aspect-ratio: 1 / 1; }
 /* La tête s'illumine de la couleur de l'humeur (stroke + halo), transition douce. */
 .face-preview svg rect {
   transition: stroke 0.6s, filter 0.6s;
