@@ -1,10 +1,14 @@
 import { useEffect, useRef, useState } from 'react'
-import { Rive as RiveRuntime, useRive } from '@rive-app/react-canvas'
+import { Layout, Rive as RiveRuntime, useRive } from '@rive-app/react-canvas'
 import FacePreview from './FacePreview'
 
 // API linéaire volontaire (la seule pilotable avec ce .riv) : on coupe le bruit
 // des avertissements de dépréciation correspondants.
 RiveRuntime.suppressDeprecationWarnings = ['default-state-machine', 'animation-names', 'loop-events']
+
+// L'artboard du panda (933x749) contient des boutons de démo à droite (x > ~760) :
+// on cadre sur une région carrée à gauche qui n'affiche que le personnage.
+const PANDA_FRAME = new Layout({ fit: 'contain', minX: 0, minY: 49, maxX: 700, maxY: 749 })
 
 // Personnage Rive (panda-emotion-animation.riv) : 10 animations linéaires nommées.
 // Mapping des 11 états du backend vers les clips du panda. Les émotions sans
@@ -36,13 +40,20 @@ export default function FaceRive({ anim }) {
   const { rive, RiveComponent } = useRive({
     src: '/panda.riv',
     autoplay: 'IDLE',
+    layout: PANDA_FRAME,
     onLoadError: () => setFailed(true),
   })
 
-  // Changement d'état backend -> lecture du clip correspondant.
+  // Changement d'état backend -> lecture du clip correspondant. En mode linéaire
+  // les clips se jouent en parallèle : il faut stopper l'ancien, sinon tout se
+  // mélange et rien ne paraît changer.
+  const clipRef = useRef('IDLE')
   useEffect(() => {
     if (!rive) return
-    rive.play(CLIP[nameRef.current] ?? 'IDLE', undefined, true)
+    const clip = CLIP[nameRef.current] ?? 'IDLE'
+    if (clipRef.current && clipRef.current !== clip) rive.stop(clipRef.current)
+    clipRef.current = clip
+    rive.play(clip, undefined, true)
   }, [rive, anim?.name])
 
   // Filet de sécurité : un clip one-shot qui s'arrête alors que l'état est
