@@ -10,6 +10,7 @@ from pathlib import Path
 from typing import Any
 
 from config import DATA_DIR
+from animations import is_valid_animation
 
 KNOWN_BOTS_FILE = DATA_DIR / "known_bots.json"
 BOT_SETTINGS_FILE = DATA_DIR / "bot_settings.json"
@@ -69,6 +70,7 @@ def default_settings(device_id: str) -> dict[str, Any]:
         "model": "",  # vide = modèle global du hub
         "heartbeat_enabled": DEFAULT_HEARTBEAT_ENABLED,
         "heartbeat_interval_minutes": DEFAULT_HEARTBEAT_INTERVAL_MINUTES,
+        "default_face": "idle",  # humeur de fond du visage : état vers lequel le bot retombe
     }
 
 
@@ -80,10 +82,12 @@ def get_bot_settings(device_id: str) -> dict[str, Any]:
 def update_bot_settings(device_id: str, updates: dict[str, Any]) -> dict[str, Any]:
     settings = _read_json(BOT_SETTINGS_FILE)
     row = default_settings(device_id) | (settings.get(device_id) or {})
-    for k in ("model", "heartbeat_enabled", "heartbeat_interval_minutes"):
+    for k in ("model", "heartbeat_enabled", "heartbeat_interval_minutes", "default_face"):
         if k in updates and updates[k] is not None:
             row[k] = updates[k]
     row["heartbeat_interval_minutes"] = max(5, min(720, int(row.get("heartbeat_interval_minutes") or 60)))
+    df = str(row.get("default_face") or "idle").strip().lower()
+    row["default_face"] = df if df == "idle" or is_valid_animation(df) else "idle"
     settings[device_id] = row
     _write_json(BOT_SETTINGS_FILE, settings)
     return row

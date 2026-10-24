@@ -312,7 +312,7 @@ button.danger-btn:hover { background: #2a1b1c; }
 
 .field { display: flex; flex-direction: column; gap: 6px; }
 .field label { font-size: 13px; color: var(--dim); }
-.field input, .modal input[type='text'] {
+.field input, .modal input[type='text'], .field select {
   background: var(--bg2); color: var(--text);
   border: 1px solid var(--line); border-radius: 8px; padding: 10px;
   font: inherit; min-height: 44px;

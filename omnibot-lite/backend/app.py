@@ -272,8 +272,13 @@ async def _run_chat_turn(
                 return
 
             display_name = (bots_mod.list_known_bots().get(device_id) or {}).get("display_name") or device_id
+            default_face = bots_mod.get_bot_settings(device_id).get("default_face") or "idle"
+            face_note = "" if default_face == "idle" else (
+                f"\n\n(Ton humeur faciale par défaut : {default_face} — c'est l'expression de ton visage "
+                "lorsque rien ne se passe ; tes émotions passagères y reviennent. Adapte ton comportement à cette humeur.)"
+            )
             base_rules = BOOTSTRAP_BASE_RULES if bootstrap else _BASE_RULES + (
-                f"\n\n(Ton nom affiché dans le hub : {display_name})"
+                f"\n\n(Ton nom affiché dans le hub : {display_name})" + face_note
             )
             sys_instr = persona.build_composed_system_instruction(
                 device_id,
@@ -343,6 +348,7 @@ class BotSettingsBody(BaseModel):
     model: Optional[str] = None
     heartbeat_enabled: Optional[bool] = None
     heartbeat_interval_minutes: Optional[int] = None
+    default_face: Optional[str] = None
 
 
 class ChatBody(BaseModel):
@@ -433,7 +439,9 @@ async def get_bot_settings(device_id: str):
 async def post_bot_settings(device_id: str, body: BotSettingsBody):
     if not bots_mod.bot_exists(device_id):
         raise HTTPException(status_code=404, detail="Bot inconnu")
-    return bots_mod.update_bot_settings(device_id, body.model_dump())
+    row = bots_mod.update_bot_settings(device_id, body.model_dump())
+    await manager.broadcast({"type": "bots_changed"})
+    return row
 
 
 # ---------------------------------------------------------------------------

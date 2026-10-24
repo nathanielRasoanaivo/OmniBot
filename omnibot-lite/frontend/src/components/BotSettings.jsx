@@ -2,8 +2,8 @@ import { useEffect, useState } from 'react'
 import { api } from '../api'
 import PersonaEditor from './PersonaEditor'
 
-// Réglages d'un bot : identité, heartbeat, maintenance, danger + éditeur persona.
-export default function BotSettings({ bot, onClose, onChanged, onBootstrap }) {
+// Réglages d'un bot : identité, humeur par défaut, heartbeat, maintenance, danger + éditeur persona.
+export default function BotSettings({ bot, catalog = [], onClose, onChanged, onBootstrap }) {
   const [tab, setTab] = useState('reglages')
   const [settings, setSettings] = useState(null)
   const [name, setName] = useState(bot.display_name)
@@ -63,6 +63,22 @@ export default function BotSettings({ bot, onClose, onChanged, onBootstrap }) {
                 onChange={(e) => setSettings({ ...settings, model: e.target.value })}
                 onBlur={() => patch({ model: settings.model })}
               />
+            </div>
+
+            <div className="field">
+              <label>Humeur par défaut du visage</label>
+              <div className="row">
+                <select
+                  value={settings.default_face || 'idle'}
+                  onChange={(e) => patch({ default_face: e.target.value })}
+                >
+                  <option value="idle">Repos</option>
+                  {catalog.filter((a) => a.name !== 'idle' && a.name !== 'speaking').map((a) => (
+                    <option key={a.name} value={a.name}>{a.label_fr}</option>
+                  ))}
+                </select>
+              </div>
+              <div className="hint">Expression vers laquelle le visage de ce bot revient après chaque émotion passagère (et entre les tours de conversation).</div>
             </div>
 
             <div className="field">

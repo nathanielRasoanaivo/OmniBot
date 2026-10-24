@@ -20,6 +20,7 @@ export default function App() {
   const [drawer, setDrawer] = useState(false)
   const [hubOk, setHubOk] = useState(null)
   const faceTimers = useRef({})
+  const defaultsRef = useRef({})  // device_id -> humeur par défaut (réglage du bot)
   const selectedRef = useRef(null)
   selectedRef.current = selectedId
 
@@ -29,13 +30,28 @@ export default function App() {
     clearTimeout(faceTimers.current[did])
     setFaces((f) => ({ ...f, [did]: name }))
     if (durationMs) {
-      faceTimers.current[did] = setTimeout(() => setFaces((f) => ({ ...f, [did]: 'idle' })), durationMs)
+      faceTimers.current[did] = setTimeout(
+        () => setFaces((f) => ({ ...f, [did]: defaultsRef.current[did] || 'idle' })),
+        durationMs,
+      )
     }
   }, [])
 
   const refreshBots = useCallback(() => {
     return api.bots().then((r) => {
       setBots(r.bots)
+      setFaces((f) => {
+        const n = { ...f }
+        for (const b of r.bots) {
+          const next = b.settings?.default_face || 'idle'
+          const prev = defaultsRef.current[b.device_id]
+          // Le repos affiché était l'ancienne humeur par défaut : on le efface
+          // pour que le nouveau défaut s'applique immédiatement.
+          if (prev && prev !== next && f[b.device_id] === prev) delete n[b.device_id]
+          defaultsRef.current[b.device_id] = next
+        }
+        return n
+      })
       setSelectedId((sel) => (sel && r.bots.some((b) => b.device_id === sel) ? sel : r.bots[0]?.device_id || null))
     }).catch(() => {})
   }, [])
@@ -89,14 +105,14 @@ export default function App() {
         case 'chat_done':
           setLiveTurns(({ [did]: _drop, ...rest }) => rest)
           setProcessing((p) => { const n = new Set(p); n.delete(did); return n })
-          setFace(did, 'idle', 0)
+          setFace(did, defaultsRef.current[did] || 'idle', 0)
           if (did === selectedRef.current) loadHistory(did)
           break
         case 'chat_error':
           setErrors((e) => ({ ...e, [did]: ev.error }))
           setLiveTurns(({ [did]: _drop, ...rest }) => rest)
           setProcessing((p) => { const n = new Set(p); n.delete(did); return n })
-          setFace(did, 'idle', 0)
+          setFace(did, defaultsRef.current[did] || 'idle', 0)
           break
         case 'bots_changed':
           refreshBots()
@@ -145,7 +161,8 @@ export default function App() {
   }
 
   const animMap = Object.fromEntries(catalog.map((a) => [a.name, a]))
-  const currentFace = animMap[faces[selectedId] || 'idle'] || animMap.idle || { name: 'idle', label_fr: 'Repos', face: {}, deco: [], color: '#8aa2c8' }
+  const restFace = selectedBot?.settings?.default_face || 'idle'
+  const currentFace = animMap[faces[selectedId] || restFace] || animMap.idle || { name: 'idle', label_fr: 'Repos', face: {}, deco: [], color: '#8aa2c8' }
 
   return (
     <div className={`app${drawer ? ' drawer-open' : ''}`} style={{ '--accent': currentFace.color }}>
@@ -219,6 +236,7 @@ export default function App() {
       {showBot && selectedBot && (
         <BotSettings
           bot={selectedBot}
+          catalog={catalog}
           onClose={() => setShowBot(false)}
           onChanged={refreshBots}
           onBootstrap={bootstrap}
