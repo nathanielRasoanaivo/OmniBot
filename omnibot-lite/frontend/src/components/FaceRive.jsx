@@ -1,35 +1,32 @@
 import { useEffect, useRef, useState } from 'react'
-import { Layout, Rive as RiveRuntime, useRive } from '@rive-app/react-canvas'
+import { useRive } from '@rive-app/react-canvas'
 import FacePreview from './FacePreview'
 
-// API linéaire volontaire (la seule pilotable avec ce .riv) : on coupe le bruit
-// des avertissements de dépréciation correspondants.
-RiveRuntime.suppressDeprecationWarnings = ['default-state-machine', 'animation-names', 'loop-events']
+// Personnage Rive : norabot.riv (assistant "Nora"). Contrairement au panda, ce
+// fichier est piloté par son state machine + data binding (View Model) : on
+// change la valeur de l'enum "States" et le SM fait les transitions lui-même.
+const SM_NAME = 'State Machine 1'
 
-// L'artboard du panda (933x749) contient des boutons de démo à droite (x > ~760) :
-// on cadre sur une région carrée à gauche qui n'affiche que le personnage.
-const PANDA_FRAME = new Layout({ fit: 'contain', minX: 0, minY: 49, maxX: 700, maxY: 749 })
-
-// Personnage Rive (panda-emotion-animation.riv) : 10 animations linéaires nommées.
-// Mapping des 11 états du backend vers les clips du panda. Les émotions sans
-// équivalent direct prennent la clip au visage le plus proche (à affiner quand
-// un .riv plus riche sera choisi).
-const CLIP = {
-  idle: 'IDLE',
-  thinking: 'THINKING',
-  speaking: 'LAUGHING', // bouche ouverte qui bouge : substitut de parole
-  happy: 'HAPPY',
-  excited: 'CELEBRATE',
-  surprised: 'SHOCKED',
-  sleepy: 'SLEEPY',
-  mad: 'SUSPICIOUS',    // regard sombre et soupçonneux
-  confused: 'SUSPICIOUS',
-  love: 'HAPPY',
-  sad: 'IDLE',          // pas de clip triste dans ce fichier
+// Mapping des 11 états du backend vers les valeurs de l'enum "States"
+// (valeurs autorisées : Thinking, Excited, Idle, Happy, Sad, Surprised).
+const STATE = {
+  idle: 'Idle',
+  thinking: 'Thinking',
+  confused: 'Thinking',
+  happy: 'Happy',
+  love: 'Happy',
+  excited: 'Excited',
+  sad: 'Sad',
+  mad: 'Sad',
+  surprised: 'Surprised',
+  sleepy: 'Idle',
+  speaking: 'Idle', // la bouche est animée par le visème "TTS" pendant la parole
 }
-// États persistants : si le clip est authoré en one-shot, le filet de sécurité
-// ci-dessous le rejoue pour que le visage continue de vivre.
-const PERSISTENT = new Set(['idle', 'thinking', 'speaking'])
+
+// "TTS" est un index de visème (0 = silence, 1..21 = phonèmes) : pendant la
+// parole on le fait tourner pour le lip-sync.
+const VISEME_COUNT = 21
+const VISEME_INTERVAL_MS = 110
 
 // Rendu Rive du visage ; retombe sur le SVG paramétrique si le .riv ne charge pas.
 export default function FaceRive({ anim }) {
@@ -38,37 +35,40 @@ export default function FaceRive({ anim }) {
   nameRef.current = anim?.name || 'idle'
 
   const { rive, RiveComponent } = useRive({
-    src: '/panda.riv',
-    autoplay: 'IDLE',
-    layout: PANDA_FRAME,
+    src: '/norabot.riv',
+    stateMachine: SM_NAME,
+    autoplay: true,
+    autoBind: true,
     onLoadError: () => setFailed(true),
   })
 
-  // Changement d'état backend -> lecture du clip correspondant. En mode linéaire
-  // les clips se jouent en parallèle : il faut stopper l'ancien, sinon tout se
-  // mélange et rien ne paraît changer.
-  const clipRef = useRef('IDLE')
+  // État backend -> valeur de l'enum liée (le SM assure la transition).
   useEffect(() => {
     if (!rive) return
-    const clip = CLIP[nameRef.current] ?? 'IDLE'
-    if (clipRef.current && clipRef.current !== clip) rive.stop(clipRef.current)
-    clipRef.current = clip
-    rive.play(clip, undefined, true)
+    // Le fichier sert aussi de démo : on coupe le fond de chambre embarqué.
+    const env = rive.viewModelInstance?.enum?.('Enviroment')
+    if (env) env.value = 'None'
+    const states = rive.viewModelInstance?.enum?.('States')
+    if (states) states.value = STATE[nameRef.current] ?? 'Idle'
   }, [rive, anim?.name])
 
-  // Filet de sécurité : un clip one-shot qui s'arrête alors que l'état est
-  // persistant (idle/thinking/speaking) est rejoué immédiatement.
+  // Parole -> cycle de visèmes aléatoires sur "TTS", remis à zéro sinon.
   useEffect(() => {
     if (!rive) return
-    const onLoop = (e) => {
-      const cur = CLIP[nameRef.current] ?? 'IDLE'
-      if (e?.animation === cur && e?.type === 'oneshot' && PERSISTENT.has(nameRef.current)) {
-        rive.play(cur, undefined, true)
-      }
+    const tts = rive.viewModelInstance?.number?.('TTS')
+    if (!tts) return
+    if (nameRef.current !== 'speaking') {
+      tts.value = 0
+      return
     }
-    rive.on('loop', onLoop)
-    return () => rive.off('loop', onLoop)
-  }, [rive])
+    const id = setInterval(() => {
+      tts.value = 1 + Math.floor(Math.random() * VISEME_COUNT)
+    }, VISEME_INTERVAL_MS)
+    return () => {
+      clearInterval(id)
+      tts.value = 0
+    }
+  }, [rive, anim?.name])
 
   if (failed) return <FacePreview anim={anim} />
 
