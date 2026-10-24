@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { api, connectMonitor } from './api'
 import Sidebar from './components/Sidebar'
 import ChatFeed from './components/ChatFeed'
-import FacePreview from './components/FacePreview'
+import FaceRive from './components/FaceRive'
 import HubSettings from './components/HubSettings'
 import BotSettings from './components/BotSettings'
 
@@ -185,7 +185,7 @@ export default function App() {
               />
 
               <div className="face-panel">
-                <FacePreview anim={currentFace} />
+                <FaceRive anim={currentFace} />
                 <div className="face-label">
                   <b>{currentFace.label_fr}</b>
                   {currentFace.description_fr && <span>{currentFace.description_fr}</span>}
