@@ -195,6 +195,11 @@ button.danger-btn:hover { background: #2a1b1c; }
 .feed-hint { color: var(--dim); font-size: 14px; max-width: 42ch; }
 
 .msg { max-width: 78%; }
+.msg .body a {
+  color: var(--accent); text-decoration: underline;
+  text-underline-offset: 2px; overflow-wrap: anywhere;
+}
+.msg .body a:hover { text-decoration: none; }
 .msg .body {
   background: var(--panel2); border: 1px solid var(--line);
   border-radius: 12px 12px 12px 4px; padding: 10px 13px;

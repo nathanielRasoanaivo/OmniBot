@@ -1,5 +1,29 @@
 import { useEffect, useRef, useState } from 'react'
 
+// Rendu léger du texte assistant : liens markdown [txt](url) + URLs nues cliquables
+// (nouvel onglet, http/https uniquement) + **gras**. Aucune injection HTML.
+const RICH_RE =
+  /\[([^\]\n]+)\]\((https?:\/\/[^\s)]+)\)|(https?:\/\/[^\s«»"'()[\]<>]*[^\s«»"'()[\]<>.,;:!?…])|\*\*([^*\n]+)\*\*/g
+
+function renderRich(text, keyBase = '') {
+  const out = []
+  let last = 0
+  let n = 0
+  for (const m of String(text).matchAll(RICH_RE)) {
+    if (m.index > last) out.push(text.slice(last, m.index))
+    if (m[2]) {
+      out.push(<a key={`${keyBase}a${n++}`} href={m[2]} target="_blank" rel="noopener noreferrer">{m[1]}</a>)
+    } else if (m[3]) {
+      out.push(<a key={`${keyBase}a${n++}`} href={m[3]} target="_blank" rel="noopener noreferrer">{m[3]}</a>)
+    } else {
+      out.push(<strong key={`${keyBase}b${n++}`}>{m[4]}</strong>)
+    }
+    last = m.index + m[0].length
+  }
+  if (last < String(text).length) out.push(text.slice(last))
+  return out
+}
+
 // Flux d'intelligence : historique + tour en cours (deltas streaming, outils joués).
 export default function ChatFeed({ bot, messages, liveTurn, error, processing, onSend, onReset }) {
   const [draft, setDraft] = useState('')
@@ -38,7 +62,7 @@ export default function ChatFeed({ bot, messages, liveTurn, error, processing, o
         )}
         {messages.map((m, i) => (
           <div key={i} className={`msg ${m.role}`}>
-            <div className="body">{m.content}</div>
+            <div className="body">{renderRich(m.content, `m${i}-`)}</div>
           </div>
         ))}
         {liveTurn && (
@@ -50,7 +74,7 @@ export default function ChatFeed({ bot, messages, liveTurn, error, processing, o
                 ))}
               </div>
             )}
-            {liveTurn.text && <div className="body">{liveTurn.text}</div>}
+            {liveTurn.text && <div className="body">{renderRich(liveTurn.text, 'live-')}</div>}
             {!liveTurn.text && liveTurn.tools.length === 0 && <div className="body dim">…</div>}
           </div>
         )}
