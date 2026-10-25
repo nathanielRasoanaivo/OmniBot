@@ -31,6 +31,9 @@ export const api = {
     j(`/api/bots/${id}/face-animation`, { method: 'POST', body: JSON.stringify({ animation, duration_ms }) }),
   hubSettings: () => j('/api/hub/settings'),
   saveHubSettings: (s) => j('/api/hub/settings', { method: 'POST', body: JSON.stringify(s) }),
+  saveHubServer: (s) => j('/api/hub/servers', { method: 'POST', body: JSON.stringify(s) }),
+  deleteHubServer: (id) => j(`/api/hub/servers/${id}`, { method: 'DELETE' }),
+  activateHubServer: (id) => j(`/api/hub/servers/${id}/activate`, { method: 'POST' }),
 }
 
 // WebSocket monitor avec reconnexion automatique. onEvent(ev) reçoit tous les événements.

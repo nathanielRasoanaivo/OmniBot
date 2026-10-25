@@ -96,12 +96,41 @@ def llm_api_key() -> str:
     return v
 
 
+def llm_servers() -> list[dict[str, Any]]:
+    """Serveurs LLM nommés enregistrés via l'UI (profils de bascule rapide).
+
+    Entrées : {id, name, base_url, model, api_key} ; la valeur active reste
+    llm_base_url/llm_model/llm_api_key (les serveurs ne sont que des presets).
+    """
+    s = _read_hub_settings()
+    return [x for x in (s.get("llm_servers") or []) if isinstance(x, dict) and x.get("base_url")]
+
+
+def _mask_key(key: str) -> str:
+    if not key:
+        return ""
+    return (key[:4] + "…" + key[-4:]) if len(key) > 8 else "•" * len(key)
+
+
 def hub_settings_public() -> dict[str, Any]:
-    """Réglages pour l'UI ; la clé n'est renvoyée que masquée."""
+    """Réglages pour l'UI ; les clés API ne sont renvoyées que masquées."""
     key = llm_api_key()
+    cur_url = llm_base_url()
     return {
         "llm_base_url": llm_base_url(),
         "llm_model": llm_model(),
         "llm_api_key_set": bool(key),
-        "llm_api_key_masked": (key[:4] + "…" + key[-4:]) if len(key) > 8 else ("•" * len(key) if key else ""),
+        "llm_api_key_masked": _mask_key(key),
+        "llm_servers": [
+            {
+                "id": str(s.get("id") or ""),
+                "name": str(s.get("name") or s.get("base_url") or ""),
+                "base_url": str(s.get("base_url") or "").strip().rstrip("/"),
+                "model": str(s.get("model") or ""),
+                "api_key_set": bool(s.get("api_key")),
+                "api_key_masked": _mask_key(str(s.get("api_key") or "")),
+                "active": str(s.get("base_url") or "").strip().rstrip("/") == cur_url,
+            }
+            for s in llm_servers()
+        ],
     }

@@ -9,6 +9,7 @@ from __future__ import annotations
 import asyncio
 import json
 import shutil
+import uuid
 from typing import Any, Optional
 
 from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect
@@ -27,7 +28,7 @@ from animations import (
     animation_catalog,
     is_valid_animation,
 )
-from config import DATA_DIR, hub_settings_public, llm_base_url, llm_model, update_hub_settings
+from config import DATA_DIR, hub_settings_public, llm_base_url, llm_model, llm_servers, update_hub_settings
 
 app = FastAPI(title="omnibot-lite")
 
@@ -368,6 +369,18 @@ class HubSettingsBody(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
 
+class LlmServerBody(BaseModel):
+    """Profil serveur LLM nommé (preset de bascule rapide dans l'UI)."""
+
+    id: Optional[str] = None
+    name: Optional[str] = None
+    base_url: Optional[str] = None
+    model: Optional[str] = None
+    api_key: Optional[str] = None
+
+    model_config = ConfigDict(extra="forbid")
+
+
 # ---------------------------------------------------------------------------
 # API : statut, bots, réglages
 # ---------------------------------------------------------------------------
@@ -602,6 +615,62 @@ async def get_hub_settings():
 @app.post("/api/hub/settings")
 async def post_hub_settings(body: HubSettingsBody):
     update_hub_settings(**body.model_dump())
+    return hub_settings_public()
+
+
+# --- Profils de serveurs LLM (bascule sans repasser par le .env) ---
+
+
+@app.post("/api/hub/servers")
+async def post_hub_server(body: LlmServerBody):
+    """Ajoute ou met à jour un profil serveur (par id si fourni)."""
+    if body.base_url is not None:
+        url = body.base_url.strip().rstrip("/")
+        if not url.startswith(("http://", "https://")):
+            raise HTTPException(status_code=400, detail="URL invalide (http:// ou https://)")
+    servers = list(llm_servers())
+    sid = (body.id or "").strip()
+    entry = next((s for s in servers if s.get("id") == sid), None) if sid else None
+    if entry is None:
+        entry = {"id": uuid.uuid4().hex[:8]}
+        servers.append(entry)
+    if body.name is not None:
+        entry["name"] = body.name.strip()
+    if body.base_url is not None:
+        entry["base_url"] = url
+    if body.model is not None:
+        entry["model"] = body.model.strip()
+    if body.api_key:
+        entry["api_key"] = body.api_key.strip()
+    if not entry.get("base_url"):
+        raise HTTPException(status_code=400, detail="base_url requise")
+    entry.setdefault("name", "")
+    entry.setdefault("model", "")
+    update_hub_settings(llm_servers=servers)
+    return hub_settings_public()
+
+
+@app.delete("/api/hub/servers/{server_id}")
+async def delete_hub_server(server_id: str):
+    servers = list(llm_servers())
+    kept = [s for s in servers if s.get("id") != server_id]
+    if len(kept) == len(servers):
+        raise HTTPException(status_code=404, detail="Serveur inconnu")
+    update_hub_settings(llm_servers=kept)
+    return hub_settings_public()
+
+
+@app.post("/api/hub/servers/{server_id}/activate")
+async def activate_hub_server(server_id: str):
+    """Applique un profil enregistré comme réglages actifs du hub."""
+    srv = next((s for s in llm_servers() if s.get("id") == server_id), None)
+    if srv is None:
+        raise HTTPException(status_code=404, detail="Serveur inconnu")
+    update_hub_settings(
+        llm_base_url=str(srv.get("base_url") or "").strip().rstrip("/"),
+        llm_model=str(srv.get("model") or ""),
+        llm_api_key=str(srv.get("api_key") or ""),
+    )
     return hub_settings_public()
 
 
